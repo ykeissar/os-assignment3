@@ -65,6 +65,28 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 13 || r_scause() == 15){
+    // page_fault
+    uint64 va = r_stval();
+    pte_t *pte = walk(p->pagetable,va,0);
+    if(!pte || !(*pte & PTE_PG)){
+      printf("usertrap(): sigfault scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
+    else{
+      uint64 page_address;
+      pte_t* ppte = find_page_to_store(&page_address);
+      if(store_page(ppte,page_address) < 0 || load_page(va) < 0){
+        printf("usertrap(): sigfault scause %p pid=%d\n", r_scause(), p->pid);
+        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+        p->killed = 1;
+      }
+      else{
+        p->trapframe->epc -= 4;
+      }
+    }
+
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

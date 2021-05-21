@@ -219,12 +219,20 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
   char *mem;
   uint64 a;
+  uint64 page_address;
 
   if(newsz < oldsz)
     return oldsz;
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
+    // in case there is no more physical memory
+    if(a >= MAX_PSYC_PAGES*PGSIZE){
+      pte_t *pte = find_page_to_store(&page_address);
+      if(store_page(pte,page_address) < 0)
+        return 0;
+    }
+
     mem = kalloc();
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);

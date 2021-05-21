@@ -331,6 +331,7 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_PG (1L << 9) // Paged out to secondary storage 
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
@@ -343,6 +344,9 @@ sfence_vma()
 #define PXMASK          0x1FF // 9 bits
 #define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 #define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
+
+#define PAD_MASK        0x3FFFF000 // extract 27 middle bits of L2,L1,L0
+#define P_LEVELS_ADDRESS(va) (((uint64)(va)) & PAD_MASK)
 
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by

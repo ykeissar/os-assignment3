@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct storedpage;
 
 // bio.c
 void            binit(void);
@@ -110,6 +111,9 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+pte_t*          find_page_to_store(uint64*);
+int             load_page(uint64 va);
+int             store_page(pte_t *pte, uint64 page_address);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -177,6 +181,7 @@ void            uvmfree(pagetable_t, uint64);
 void            uvmunmap(pagetable_t, uint64, uint64, int);
 void            uvmclear(pagetable_t, uint64);
 uint64          walkaddr(pagetable_t, uint64);
+pte_t*          walk(pagetable_t , uint64 , int );
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);

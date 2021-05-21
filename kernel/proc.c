@@ -18,6 +18,9 @@ struct spinlock pid_lock;
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
+struct storedpage* get_free_storedpage(void);
+struct storedpage* get_wanted_storedpage(uint64);
+
 extern char trampoline[]; // trampoline.S
 
 // helps ensure that wakeups of wait()ing
@@ -135,6 +138,21 @@ found:
     return 0;
   }
 
+  struct storedpage* sp;
+  int i = 0;
+  for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
+    sp->in_use = 0;
+    sp->page_address = 0;
+    sp->file_offset = PGSIZE*i;
+    i++;
+  }
+
+  if(createSwapFile(p) < 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -155,6 +173,9 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  
+  removeSwapFile(p);
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -303,6 +324,23 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  char buffer[PGSIZE];
+
+  struct storedpage* sp;
+  struct storedpage* nsp = np->storedpages;
+  
+  for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
+    if(sp->in_use){
+      if(readFromSwapFile(p,buffer,sp->file_offset,PGSIZE) < 0)
+        return -1;
+      if(writeToSwapFile(np,buffer,sp->file_offset,PGSIZE) < 0)
+        return -1;
+      nsp->page_address = sp->page_address;
+      nsp->in_use = sp->in_use;
+    }
+    nsp++;
+  }
+  
   pid = np->pid;
 
   release(&np->lock);
@@ -653,4 +691,82 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+store_page(pte_t *pte, uint64 page_address){
+  struct proc *p = myproc();
+  struct storedpage *sp = get_free_storedpage();
+
+  uint64 pa = PTE2PA(*pte);
+
+  if(!sp || !pa || writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE) < 0)
+    return -1;
+  
+  sp->in_use = 1;
+  sp->page_address = page_address;
+  *pte |= PTE_PG;
+  *pte &= ~PTE_V;
+
+  kfree((void*)pa);
+
+  return 0;
+}
+
+// load page which va belongs to from disk to pa
+int
+load_page(uint64 va){
+  struct proc *p = myproc();
+  struct storedpage *sp = get_wanted_storedpage(va);
+  pte_t *pte;
+
+  if((pte = walk(p->pagetable,va,0)) == 0)
+    return -1;
+
+  uint64 pa;
+  if((pa = (uint64) kalloc()) == 0){
+    return -1;
+  }
+
+  if(!sp || readFromSwapFile(p, (char*)pa, sp->file_offset, PGSIZE) < 0)
+    return -1;
+  
+  sp->in_use = 0;
+  sp->page_address = 0;
+
+  *pte |= PTE_V;
+  *pte &= ~PTE_PG;
+
+  return 0;
+}
+
+struct storedpage*
+get_free_storedpage(void){
+  struct proc *p = myproc();
+  struct storedpage* sp;
+  for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
+    if(!sp->in_use){
+      return sp;
+    }
+  }
+  return 0;
+}
+
+struct storedpage*
+get_wanted_storedpage(uint64 va){
+  struct proc *p = myproc();
+  struct storedpage* sp;
+  uint64 page_address = P_LEVELS_ADDRESS(va);
+
+  for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
+    if(sp->page_address == page_address && sp->in_use){
+      return sp;
+    }
+  }
+  return 0;
+}
+
+pte_t*
+find_page_to_store(uint64* page_address){
+  return 0;
 }
