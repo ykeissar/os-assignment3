@@ -3,6 +3,8 @@
 #include "memlayout.h"
 #include "elf.h"
 #include "riscv.h"
+#include "spinlock.h"
+#include "proc.h"
 #include "defs.h"
 #include "fs.h"
 
@@ -223,11 +225,12 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
   if(newsz < oldsz)
     return oldsz;
+  int pid = myproc()->pid;
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
     // in case there is no more physical memory
-    if(a >= MAX_PSYC_PAGES*PGSIZE){
+    if(a >= MAX_PSYC_PAGES*PGSIZE && pid != 1 && pid != 2){
       pte_t *pte = find_page_to_store(&page_address);
       if(store_page(pte,page_address) < 0)
         return 0;

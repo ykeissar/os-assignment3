@@ -282,6 +282,8 @@ growproc(int n)
   return 0;
 }
 
+char buffer[PGSIZE];
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -318,13 +320,12 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
-  if(createSwapFile(p) < 0){
-    freeproc(p);
-    release(&p->lock);
+  release(&np->lock);
+  if(createSwapFile(np) < 0){
+    freeproc(np);
     return 0;
   }
-
-  char buffer[PGSIZE];
+  acquire(&np->lock);
 
   struct storedpage* sp;
   struct storedpage* nsp = np->storedpages;
@@ -768,5 +769,6 @@ get_wanted_storedpage(uint64 va){
 
 pte_t*
 find_page_to_store(uint64* page_address){
-  return 0;
+
+  return pte;
 }

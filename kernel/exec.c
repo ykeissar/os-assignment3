@@ -108,6 +108,11 @@ exec(char *path, char **argv)
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
     
+  struct storedpage* spage;
+  for(spage = p->storedpages; spage < &p->storedpages[MAX_TOTAL_PAGES]; spage++){
+    spage->in_use = 0;
+  }
+
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
