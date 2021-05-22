@@ -147,12 +147,6 @@ found:
     i++;
   }
 
-  if(createSwapFile(p) < 0){
-    freeproc(p);
-    release(&p->lock);
-    return 0;
-  }
-
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -324,11 +318,17 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  if(createSwapFile(p) < 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   char buffer[PGSIZE];
 
   struct storedpage* sp;
   struct storedpage* nsp = np->storedpages;
-  
+
   for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
     if(sp->in_use){
       if(readFromSwapFile(p,buffer,sp->file_offset,PGSIZE) < 0)
