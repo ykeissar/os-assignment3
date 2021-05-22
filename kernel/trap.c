@@ -65,7 +65,7 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if (r_scause() == 13 || r_scause() == 15){
+  } else if ((r_scause() == 13 || r_scause() == 15) && SELECTION != NONE){
     // page_fault
     uint64 va = r_stval();
     pte_t *pte = walk(p->pagetable,va,0);

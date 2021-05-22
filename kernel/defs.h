@@ -199,3 +199,7 @@ void            virtio_disk_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+#define SCFIFO 1
+#define NFUA 2
+#define LAPA 3
+#define NONE 4
