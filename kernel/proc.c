@@ -175,12 +175,6 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
 
-  // release(&p->lock);
-  // printf("process %d released %s lock\n", p->pid, p->lock.name);
-  removeSwapFile(p);
-  // acquire(&p->lock);
-  // printf("process %d acuireded %s lock\n", p->pid, p->lock.name);
-
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -190,6 +184,13 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  release(&p->lock);
+  // printf("process %d released %s lock\n", p->pid, p->lock.name);
+  removeSwapFile(p);
+  acquire(&p->lock);
+  // printf("process %d acuireded %s lock\n", p->pid, p->lock.name);
+
 }
 
 // Create a user page table for a given process,
@@ -331,9 +332,9 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
-  // release(&np->lock);
-  // createSwapFile(np);
-  // acquire(&np->lock);
+  release(&np->lock);
+  createSwapFile(np);
+  acquire(&np->lock);
 
   struct storedpage* sp;
   struct storedpage* nsp = np->storedpages;
@@ -831,6 +832,13 @@ get_wanted_storedpage(uint64 va){
 
 pte_t*
 find_page_to_store(uint64* page_address){
-
+  switch(SELECTION){
+    case SCFIFO:
+      return 0;
+    case LAPA:
+      return 0;
+    case NFUA:
+      return 0;
+  }
   return 0;
 }
