@@ -94,10 +94,10 @@ allocpid() {
   
   acquire(&pid_lock);
   pid = nextpid;
-  printf("process %d  acquired %s lock\n", pid, pid_lock.name);
+  // printf("process %d  acquired %s lock\n", pid, pid_lock.name);
   nextpid = nextpid + 1;
   release(&pid_lock);
-  printf("process %d  released %s lock\n", pid, pid_lock.name);
+  // printf("process %d  released %s lock\n", pid, pid_lock.name);
 
   return pid;
 }
@@ -113,14 +113,14 @@ allocproc(void)
 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if(p->pid != 0)
-      printf("process %d  acquired %s lock\n", p->pid, p->lock.name);
+    // if(p->pid != 0)
+      // printf("process %d  acquired %s lock\n", p->pid, p->lock.name);
     if(p->state == UNUSED) {
       goto found;
     } else {
       release(&p->lock);
-      if(p->pid != 0)      
-        printf("process %d  released %s lock\n", p->pid, p->lock.name);
+      // if(p->pid != 0)      
+        // printf("process %d  released %s lock\n", p->pid, p->lock.name);
 
     }
   }
@@ -175,11 +175,11 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
 
-  release(&p->lock);
-  printf("process %d released %s lock\n", p->pid, p->lock.name);
+  // release(&p->lock);
+  // printf("process %d released %s lock\n", p->pid, p->lock.name);
   removeSwapFile(p);
-  acquire(&p->lock);
-  printf("process %d acuireded %s lock\n", p->pid, p->lock.name);
+  // acquire(&p->lock);
+  // printf("process %d acuireded %s lock\n", p->pid, p->lock.name);
 
   p->pagetable = 0;
   p->sz = 0;
@@ -312,7 +312,7 @@ fork(void)
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
-    printf("process %d released %s lock\n", np->pid, np->lock.name);
+    // printf("process %d released %s lock\n", np->pid, np->lock.name);
     return -1;
   }
   np->sz = p->sz;
@@ -344,13 +344,13 @@ fork(void)
         return -1;
     
       release(&np->lock);
-      if(p->pid != 0)
-        printf("process %d released %s lock\n", np->pid, np->lock.name);
+      // if(p->pid != 0)
+        // printf("process %d released %s lock\n", np->pid, np->lock.name);
       if(writeToSwapFile(np,buffer,sp->file_offset,PGSIZE) < 0)
         return -1;
       acquire(&np->lock);
-      if(p->pid != 0)
-        printf("process %d acuired %s lock\n", np->pid, np->lock.name);
+      // if(p->pid != 0)
+        // printf("process %d acuired %s lock\n", np->pid, np->lock.name);
       nsp->page_address = sp->page_address;
       nsp->in_use = sp->in_use;
     }
@@ -359,19 +359,19 @@ fork(void)
   
   pid = np->pid;
   release(&np->lock);
-  printf("process %d released %s lock\n", np->pid, np->lock.name);
+  // printf("process %d released %s lock\n", np->pid, np->lock.name);
   acquire(&wait_lock);
-  printf("process %d acuired %s lock\n", p->pid, wait_lock.name);
+  // printf("process %d acuired %s lock\n", p->pid, wait_lock.name);
 
   np->parent = p;
   release(&wait_lock);
-  printf("process %d released %s lock\n", p->pid, wait_lock.name);
+  // printf("process %d released %s lock\n", p->pid, wait_lock.name);
 
   acquire(&np->lock);
-  printf("process %d acuired %s lock\n", np->pid, np->lock.name);
+  // printf("process %d acuired %s lock\n", np->pid, np->lock.name);
   np->state = RUNNABLE;
   release(&np->lock);
-  printf("process %d released %s lock\n", np->pid, np->lock.name);
+  // printf("process %d released %s lock\n", np->pid, np->lock.name);
 
   return pid;
 }
@@ -416,9 +416,9 @@ exit(int status)
   end_op();
   p->cwd = 0;
 
-  printf("process %d released %s lock\n", p->pid, wait_lock.name);
+  // printf("process %d released %s lock\n", p->pid, wait_lock.name);
   acquire(&wait_lock);
-  printf("process %d released %s lock\n", p->pid, wait_lock.name);
+  // printf("process %d released %s lock\n", p->pid, wait_lock.name);
 
   // Give any children to init.
   reparent(p);
@@ -427,13 +427,13 @@ exit(int status)
   wakeup(p->parent);
   
   acquire(&p->lock);
-  printf("process %d acuired %s lock\n", p->pid, p->lock.name);
+  // printf("process %d acuired %s lock\n", p->pid, p->lock.name);
 
   p->xstate = status;
   p->state = ZOMBIE;
 
   release(&wait_lock);
-  printf("process %d released %s lock\n", p->pid, wait_lock.name);
+  // printf("process %d released %s lock\n", p->pid, wait_lock.name);
 
 
   // Jump into the scheduler, never to return.
@@ -459,8 +459,8 @@ wait(uint64 addr)
       if(np->parent == p){
         // make sure the child isn't still in exit() or swtch().
         acquire(&np->lock);
-        if(p->pid != 0)
-          printf("process %d acquired %s lock\n", np->pid, np->lock.name);
+        // if(p->pid != 0)
+          // printf("process %d acquired %s lock\n", np->pid, np->lock.name);
 
         havekids = 1;
         if(np->state == ZOMBIE){
@@ -469,25 +469,25 @@ wait(uint64 addr)
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
                                   sizeof(np->xstate)) < 0) {
             release(&np->lock);
-            if(p->pid != 0)      
-              printf("process %d released %s lock\n", np->pid, np->lock.name);
+            // if(p->pid != 0)      
+              // printf("process %d released %s lock\n", np->pid, np->lock.name);
             release(&wait_lock);
-            if(p->pid != 0)          
-              printf("process %d released %s lock\n", p->pid, wait_lock.name);
+            // if(p->pid != 0)          
+              // printf("process %d released %s lock\n", p->pid, wait_lock.name);
             return -1;
           }
           freeproc(np);
           release(&np->lock);
-          if(p->pid != 0)
-            printf("process %d released %s lock\n", np->pid, np->lock.name);
+          // if(p->pid != 0)
+            // printf("process %d released %s lock\n", np->pid, np->lock.name);
           release(&wait_lock);
-          if(p->pid != 0)
-            printf("process %d released %s lock\n", p->pid, wait_lock.name);
+          // if(p->pid != 0)
+            // printf("process %d released %s lock\n", p->pid, wait_lock.name);
 
           return pid;
         }
         release(&np->lock);
-        printf("process %d released %s lock\n", np->pid, np->lock.name);
+        // printf("process %d released %s lock\n", np->pid, np->lock.name);
 
       }
     }
@@ -495,8 +495,8 @@ wait(uint64 addr)
     // No point waiting if we don't have any children.
     if(!havekids || p->killed){
       release(&wait_lock);
-      if(p->pid != 0)
-        printf("process %d released %s lock\n", p->pid, wait_lock.name);
+      // if(p->pid != 0)
+        // printf("process %d released %s lock\n", p->pid, wait_lock.name);
       return -1;
     }
     
@@ -581,13 +581,13 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  if(p->pid !=0)
-    printf("process %d acquired %s lock\n", p->pid, p->lock.name);
+  // if(p->pid !=0)
+    // printf("process %d acquired %s lock\n", p->pid, p->lock.name);
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
-  if(p->pid !=0)
-    printf("process %d released %s lock\n", p->pid, p->lock.name);
+  // if(p->pid !=0)
+    // printf("process %d released %s lock\n", p->pid, p->lock.name);
 
 }
 
@@ -627,7 +627,7 @@ sleep(void *chan, struct spinlock *lk)
   // so it's okay to release lk.
 
   acquire(&p->lock);  //DOC: sleeplock1
-  printf("process %d acquired %s lock\n", p->pid, p->lock.name);
+  // printf("process %d acquired %s lock\n", p->pid, p->lock.name);
   release(lk);
 
   // Go to sleep.
@@ -641,7 +641,7 @@ sleep(void *chan, struct spinlock *lk)
 
   // Reacquire original lock.
   release(&p->lock);
-  printf("process %d released %s lock\n", p->pid, p->lock.name);
+  // printf("process %d released %s lock\n", p->pid, p->lock.name);
   acquire(lk);
 }
 
@@ -655,14 +655,14 @@ wakeup(void *chan)
   for(p = proc; p < &proc[NPROC]; p++) {
     if(p != myproc()){
       acquire(&p->lock);
-      if(p->pid != 0)
-        printf("process %d acquired %s lock\n", p->pid, p->lock.name);
+      // if(p->pid != 0)
+        // printf("process %d acquired %s lock\n", p->pid, p->lock.name);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
       }
       release(&p->lock);
-      if(p->pid != 0)
-        printf("process %d released %s lock\n", p->pid, p->lock.name);
+      // if(p->pid != 0)
+        // printf("process %d released %s lock\n", p->pid, p->lock.name);
     }
   }
 }
@@ -677,8 +677,8 @@ kill(int pid)
 
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
-    if(p->pid != 0)
-      printf("process %d acquired %s lock\n", p->pid, p->lock.name);
+    // if(p->pid != 0)
+      // printf("process %d acquired %s lock\n", p->pid, p->lock.name);
     if(p->pid == pid){
       p->killed = 1;
       if(p->state == SLEEPING){
@@ -686,13 +686,13 @@ kill(int pid)
         p->state = RUNNABLE;
       }
       release(&p->lock);
-      if(p->pid != 0)      
-        printf("process %d released %s lock\n", p->pid, p->lock.name);
+      // if(p->pid != 0)      
+        // printf("process %d released %s lock\n", p->pid, p->lock.name);
       return 0;
     }
     release(&p->lock);
-    if(p->pid != 0)
-      printf("process %d released %s lock\n", p->pid, p->lock.name);
+    // if(p->pid != 0)
+      // printf("process %d released %s lock\n", p->pid, p->lock.name);
   }
   return -1;
 }
