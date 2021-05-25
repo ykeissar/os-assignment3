@@ -88,6 +88,13 @@ struct storedpage{
   int in_use;                  // Indicate if is in use
 };
 
+struct page_access_info{
+  uint64 page_address;         // Indetfire for pte
+  uint access_counter;       //Indicates the number of access to the page; 
+  uint64 loaded_at;                // Indicates the time the page was loaded to RAM; 
+  int in_use ; 
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -114,4 +121,6 @@ struct proc {
 
   struct file *swapFile;
   struct storedpage storedpages[MAX_TOTAL_PAGES];
+  struct page_access_info ram_pages[MAX_PSYC_PAGES];
+  uint64 page_turn;
 };

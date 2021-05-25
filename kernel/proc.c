@@ -20,6 +20,10 @@ static void freeproc(struct proc *p);
 
 struct storedpage* get_free_storedpage(void);
 struct storedpage* get_wanted_storedpage(uint64);
+void update_access_counters(struct proc *p);
+int count_ones(uint);
+uint64 find_nfu(void);
+uint64 find_lapa(void);
 
 extern char trampoline[]; // trampoline.S
 
@@ -153,6 +157,14 @@ found:
     sp->file_offset = PGSIZE*i;
     i++;
   }
+  struct page_access_info* pi;
+  p->page_turn = 0;
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    pi->loaded_at = 0;
+    pi->access_counter = 0;
+    if (SELECTION == LAPA)
+      pi->access_counter = 4294967295;  
+  }
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -174,23 +186,17 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
-
+  
+  p->pid = 0;
   p->pagetable = 0;
   p->sz = 0;
-  p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-
-  release(&p->lock);
-  // printf("process %d released %s lock\n", p->pid, p->lock.name);
-  removeSwapFile(p);
-  acquire(&p->lock);
-  // printf("process %d acuireded %s lock\n", p->pid, p->lock.name);
-
+  p->page_turn = 0;
 }
 
 // Create a user page table for a given process,
@@ -357,6 +363,17 @@ fork(void)
     }
     nsp++;
   }
+
+  struct page_access_info* pi;
+  struct page_access_info* npi = np->ram_pages;
+
+  for(pi = p->ram_pages; pi < &p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    if(pi->in_use){
+      npi->page_address = pi->page_address;
+      npi->in_use = pi->in_use;
+    }
+    npi++;
+  }
   
   pid = np->pid;
   release(&np->lock);
@@ -411,6 +428,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+  removeSwapFile(p);
 
   begin_op();
   iput(p->cwd);
@@ -536,6 +554,7 @@ scheduler(void)
         c->proc = p;
         swtch(&c->context, &p->context);
 
+        update_access_counters(p);
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -547,12 +566,11 @@ scheduler(void)
     }
   }
 }
-
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
 // kernel thread, not this CPU. It should
-// be proc->intena and proc->noff, but that would
+// be proc->intena anschedulerd proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
 void
@@ -576,7 +594,7 @@ sched(void)
   mycpu()->intena = intena;
 }
 
-// Give up the CPU for one scheduling round.
+// Give up the CPU foschedulerr one scheduling round.
 void
 yield(void)
 {
@@ -604,7 +622,7 @@ forkret(void)
 
   if (first) {
     // File system initialization must be run in the context of a
-    // regular process (e.g., because it calls sleep), and thus cannot
+    // regular processreadFromSwapFile (e.g., because it calls sleep), and thus cannot
     // be run from main().
     first = 0;
     fsinit(ROOTDEV);
@@ -620,7 +638,7 @@ sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
   
-  // Must acquire p->lock in order to
+  // Must acquire p->lreadFromSwapFileock in order to
   // change p->state and then call sched.
   // Once we hold p->lock, we can be
   // guaranteed that we won't miss any wakeup
@@ -759,6 +777,7 @@ procdump(void)
 
 int
 store_page(pte_t *pte, uint64 page_address){
+  struct page_access_info* pi;
   struct proc *p = myproc();
   struct storedpage *sp = get_free_storedpage();
 
@@ -771,7 +790,17 @@ store_page(pte_t *pte, uint64 page_address){
   sp->page_address = page_address;
   *pte |= PTE_PG;
   *pte &= ~PTE_V;
+  uint64 pte_flags = PTE_FLAGS(*pte) & ~PTE_V;
+  // printf("before shutting PTE_V using mappages, the pte flags = %p ",PTE_FLAGS(*pte));
+  // mappages(p->pagetable, page_address, PGSIZE, pa, pte_flags);
+  printf("after shutting PTE_V the pte flags = %p, pte_flagsVAr = %p\\n ",PTE_FLAGS(*pte), pte_flags);
 
+//MAYBE TO RESET HERE AS WELL
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    if(pi->page_address == page_address)
+      pi->in_use = 0;
+  }
+  
   kfree((void*)pa);
 
   return 0;
@@ -798,7 +827,27 @@ load_page(uint64 va){
   sp->in_use = 0;
   sp->page_address = 0;
 
-  *pte |= PTE_V;
+  printf("process %d in load_page, calling mappages with va = %p,\npa = %p\n",p->pid, va,pa);
+  if(mappages(p->pagetable, va, PGSIZE, pa, PTE_FLAGS(*pte)) != 0){
+    printf("failed to mappages, gonna free pa\n");
+    kfree((void*)pa);
+    return -1;
+  }
+
+  struct page_access_info *pi;
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    if(!pi->in_use){
+      pi->in_use = 1;
+      pi->page_address = P_LEVELS_ADDRESS(va);
+      pi->loaded_at = get_next_turn(p);
+      if(SELECTION == LAPA)
+        pi->access_counter = 4294967295;
+      else
+        pi->access_counter = 0;
+      break;
+    }
+  }
+
   *pte &= ~PTE_PG;
 
   return 0;
@@ -824,21 +873,142 @@ get_wanted_storedpage(uint64 va){
 
   for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
     if(sp->page_address == page_address && sp->in_use){
+      // printf("found wanted page in storage, va = %p\n",va);
       return sp;
     }
   }
+  // printf("didnt find the wanted page in storage\n");
   return 0;
+}
+
+void
+update_access_counters(struct proc *p){
+  struct page_access_info *pi;
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    pi->access_counter = pi->access_counter >> 1;
+    pte_t *pte = walk(p->pagetable,pi->page_address,0); 
+    //if page is valid and was accessed
+    if(!(*pte & PTE_V) && *pte & PTE_A){
+      pi->access_counter |= 1 << 31;
+      *pte &= ~PTE_A;
+    }
+  }
+}
+
+int
+count_ones(uint accesses){
+  int i;
+  int counter = 0;
+  uint mask = 1;
+  for(i=0; i<32; i++){
+    if(mask & accesses)
+      counter++ ;
+    mask *=2;
+  }
+  return counter;
+}
+
+uint64 get_next_turn(struct proc* p){
+  uint64 next_turn = p->page_turn;
+  p->page_turn++;
+  return next_turn;
+} 
+//#############
+uint64
+find_nfu(void){
+  struct proc *p = myproc();
+  uint64 _min = 18446744073709551615UL; 
+  struct page_access_info *pi;
+  struct page_access_info *min_pi = 0;
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    if(pi->in_use && pi->access_counter < _min){
+      _min = pi->access_counter;
+      min_pi = pi;
+    }
+  }
+  return min_pi->page_address;
+}
+
+uint64 
+find_scfifo(void){
+  struct proc *p = myproc();
+  struct page_access_info *pi;
+  uint64 _min;
+  struct page_access_info *min_pi;
+  pte_t* pte;
+  printf("Process %d executing find_scfifo\n", p->pid);
+  int looper = 0;
+  while(1){
+    looper++;
+    printf("executing while loop for the %d times\n",looper);
+    _min = 18446744073709551615UL;
+    min_pi = 0;
+
+    for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+      printf("in for ");
+      if(pi->in_use && pi->loaded_at < _min){
+        _min = pi->loaded_at;
+        min_pi = pi;
+        printf("and found min %d\n",_min);
+      }
+    }
+    pte = walk(p->pagetable,min_pi->page_address,0);
+    
+    if(*pte & PTE_A){
+      min_pi->loaded_at = get_next_turn(p);
+      *pte &= ~PTE_A;
+      printf("minimum pi had been updated\n");
+    } 
+    else{
+      break;
+    }
+
+  }
+  return min_pi->page_address;
+}
+
+uint64
+find_lapa(void){
+  struct proc *p = myproc();
+  uint _min = 32;
+  struct page_access_info *pi;
+  struct page_access_info *min_pi = 0;
+  for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+    if(pi->in_use && count_ones(pi->access_counter) < _min){
+      _min = count_ones(pi->access_counter);
+      min_pi = pi;
+    }
+    else if(pi->in_use && count_ones(pi->access_counter) == _min){
+      if(!min_pi || pi->access_counter < min_pi->access_counter){
+        _min = count_ones(pi->access_counter);
+        min_pi = pi;
+      }
+    }
+  }
+  return min_pi->page_address;
 }
 
 pte_t*
 find_page_to_store(uint64* page_address){
+  struct proc *p = myproc();
   switch(SELECTION){
-    case SCFIFO:
-      return 0;
-    case LAPA:
-      return 0;
     case NFUA:
-      return 0;
+      *page_address = find_nfu();
+      printf("p %d Found page using NFUA! page_ad: %p ,calling walk..\n", p->pid,*page_address);
+      return walk(p->pagetable,*page_address,0);
+    case LAPA:
+      *page_address = find_lapa();
+      printf("p %d Found page using LAPA!  calling walk..\n",p->pid);
+      return walk(p->pagetable,*page_address,0);
+    case SCFIFO:
+      *page_address = find_scfifo();
+      printf("p %d Found page using SCFIFO! calling walk..\n",p->pid);      
+      return walk(p->pagetable,*page_address,0);
   }
   return 0;
 }
+
+
+
+
+//add intializtion readFromSwapFile0

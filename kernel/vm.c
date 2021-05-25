@@ -141,10 +141,13 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
   uint64 a, last;
   pte_t *pte;
-
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
+  // printf("process %d  Got to mappages with va = %p,\npa = %p\n",myproc()->pid, va,pa);
+  // int j = 0;
   for(;;){
+    // j++;
+    // printf("executing loop for the %d time\n",j);
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
     if(*pte & PTE_V)
@@ -219,23 +222,29 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
+  // printf("executing uvmalloc..\n");
   char *mem;
   uint64 a;
   uint64 page_address;
+  struct proc *p = myproc();
 
   if(newsz < oldsz)
     return oldsz;
-  int pid = myproc()->pid;
+  int pid = p->pid;
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
     // in case there is no more physical memory
+    printf("pid= %d\n a= %p\n ",pid,a);
     if(a >= MAX_PSYC_PAGES*PGSIZE && pid != 1 && pid != 2 && SELECTION != NONE){
+      printf("####uvm Process %d is with a = %p, and a>maxMem\n",p->pid,a);
       pte_t *pte = find_page_to_store(&page_address);
-      if(store_page(pte,page_address) < 0)
+      if(store_page(pte,page_address) < 0){
+        printf("Failed and gonna return 0 from UVMALLOC\n");
         return 0;
+      }
     }
-
+    printf("Process %d is in UVMALLOC with a = %p not limit yet\n",p->pid,a);    
     mem = kalloc();
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);
@@ -247,6 +256,22 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
+    
+    struct page_access_info* pi;
+    for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
+      if(pi->in_use == 0){
+        pi->page_address = a ; 
+        pi->loaded_at = get_next_turn(p);
+;
+        pi->in_use = 1;
+        if(SELECTION == LAPA)
+          pi->access_counter = 4294967295;
+        else
+          pi->access_counter = 0;
+        break;
+      }
+  }
+  
   }
   return newsz;
 }

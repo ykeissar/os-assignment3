@@ -6,7 +6,22 @@
 
 volatile static int started = 0;
 
-// start() jumps here in supervisor mode on all CPUs.
+// void main(){
+//   uint64 add = 63782;
+//   int i;
+//   int counter = 0;
+//   uint64 mask = 1;
+//   for(i=0; i<64; i++){
+//     if(mask & add)
+//       counter++ ;
+//     mask *=2;
+//     // printf("mask is %p\n",mask);
+//   }
+//   printf("final counter is %d\n",counter);
+// }
+
+
+//start() jumps here in supervisor mode on all CPUs.
 void
 main()
 {

@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct storedpage;
+struct page_access_info;
 
 // bio.c
 void            binit(void);
@@ -114,6 +115,8 @@ void            procdump(void);
 pte_t*          find_page_to_store(uint64*);
 int             load_page(uint64 va);
 int             store_page(pte_t *pte, uint64 page_address);
+uint64          get_next_turn(struct proc*);
+
 
 // swtch.S
 void            swtch(struct context*, struct context*);
