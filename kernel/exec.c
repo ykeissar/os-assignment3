@@ -118,6 +118,7 @@ exec(char *path, char **argv)
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
     pi->loaded_at = 0;
     pi->access_counter = 0;
+    pi->in_use = 0;
     if (SELECTION == LAPA)
       pi->access_counter = 4294967295;  
   }

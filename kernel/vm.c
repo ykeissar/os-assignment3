@@ -176,7 +176,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
+    if((*pte & PTE_V) == 0 && (*pte & PTE_PG) == 0)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
@@ -235,16 +235,13 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
     // in case there is no more physical memory
-    printf("pid= %d\n a= %p\n ",pid,a);
     if(a >= MAX_PSYC_PAGES*PGSIZE && pid != 1 && pid != 2 && SELECTION != NONE){
-      printf("####uvm Process %d is with a = %p, and a>maxMem\n",p->pid,a);
       pte_t *pte = find_page_to_store(&page_address);
       if(store_page(pte,page_address) < 0){
-        printf("Failed and gonna return 0 from UVMALLOC\n");
+        // printf("Failed and gonna return 0 from UVMALLOC\n");
         return 0;
       }
     }
-    printf("Process %d is in UVMALLOC with a = %p not limit yet\n",p->pid,a);    
     mem = kalloc();
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);
@@ -262,7 +259,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
       if(pi->in_use == 0){
         pi->page_address = a ; 
         pi->loaded_at = get_next_turn(p);
-;
         pi->in_use = 1;
         if(SELECTION == LAPA)
           pi->access_counter = 4294967295;

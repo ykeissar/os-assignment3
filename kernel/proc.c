@@ -790,12 +790,7 @@ store_page(pte_t *pte, uint64 page_address){
   sp->page_address = page_address;
   *pte |= PTE_PG;
   *pte &= ~PTE_V;
-  uint64 pte_flags = PTE_FLAGS(*pte) & ~PTE_V;
-  // printf("before shutting PTE_V using mappages, the pte flags = %p ",PTE_FLAGS(*pte));
-  // mappages(p->pagetable, page_address, PGSIZE, pa, pte_flags);
-  printf("after shutting PTE_V the pte flags = %p, pte_flagsVAr = %p\\n ",PTE_FLAGS(*pte), pte_flags);
 
-//MAYBE TO RESET HERE AS WELL
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
     if(pi->page_address == page_address)
       pi->in_use = 0;
@@ -827,8 +822,7 @@ load_page(uint64 va){
   sp->in_use = 0;
   sp->page_address = 0;
 
-  printf("process %d in load_page, calling mappages with va = %p,\npa = %p\n",p->pid, va,pa);
-  if(mappages(p->pagetable, va, PGSIZE, pa, PTE_FLAGS(*pte)) != 0){
+  if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, pa, PTE_FLAGS(*pte)) != 0){
     printf("failed to mappages, gonna free pa\n");
     kfree((void*)pa);
     return -1;
@@ -888,7 +882,7 @@ update_access_counters(struct proc *p){
     pi->access_counter = pi->access_counter >> 1;
     pte_t *pte = walk(p->pagetable,pi->page_address,0); 
     //if page is valid and was accessed
-    if(!(*pte & PTE_V) && *pte & PTE_A){
+    if(*pte & PTE_V && *pte & PTE_A){
       pi->access_counter |= 1 << 31;
       *pte &= ~PTE_A;
     }
@@ -913,7 +907,7 @@ uint64 get_next_turn(struct proc* p){
   p->page_turn++;
   return next_turn;
 } 
-//#############
+
 uint64
 find_nfu(void){
   struct proc *p = myproc();
@@ -926,6 +920,7 @@ find_nfu(void){
       min_pi = pi;
     }
   }
+
   return min_pi->page_address;
 }
 
@@ -940,16 +935,13 @@ find_scfifo(void){
   int looper = 0;
   while(1){
     looper++;
-    printf("executing while loop for the %d times\n",looper);
     _min = 18446744073709551615UL;
     min_pi = 0;
 
     for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-      printf("in for ");
       if(pi->in_use && pi->loaded_at < _min){
         _min = pi->loaded_at;
         min_pi = pi;
-        printf("and found min %d\n",_min);
       }
     }
     pte = walk(p->pagetable,min_pi->page_address,0);
@@ -957,7 +949,6 @@ find_scfifo(void){
     if(*pte & PTE_A){
       min_pi->loaded_at = get_next_turn(p);
       *pte &= ~PTE_A;
-      printf("minimum pi had been updated\n");
     } 
     else{
       break;
@@ -994,7 +985,6 @@ find_page_to_store(uint64* page_address){
   switch(SELECTION){
     case NFUA:
       *page_address = find_nfu();
-      printf("p %d Found page using NFUA! page_ad: %p ,calling walk..\n", p->pid,*page_address);
       return walk(p->pagetable,*page_address,0);
     case LAPA:
       *page_address = find_lapa();
@@ -1007,8 +997,3 @@ find_page_to_store(uint64* page_address){
   }
   return 0;
 }
-
-
-
-
-//add intializtion readFromSwapFile0
