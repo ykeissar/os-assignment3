@@ -143,11 +143,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   pte_t *pte;
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
-  // printf("process %d  Got to mappages with va = %p,\npa = %p\n",myproc()->pid, va,pa);
-  // int j = 0;
+
   for(;;){
-    // j++;
-    // printf("executing loop for the %d time\n",j);
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
     if(*pte & PTE_V)
@@ -180,7 +177,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    if(do_free){
+    if(do_free && (*pte & PTE_V)){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
@@ -238,7 +235,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     if(a >= MAX_PSYC_PAGES*PGSIZE && pid != 1 && pid != 2 && SELECTION != NONE){
       pte_t *pte = find_page_to_store(&page_address);
       if(store_page(pte,page_address) < 0){
-        // printf("Failed and gonna return 0 from UVMALLOC\n");
         return 0;
       }
     }
@@ -279,12 +275,19 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 uint64
 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
+  uint64 va;
+  pte_t *pte;
   if(newsz >= oldsz)
     return oldsz;
 
   if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    va = PGROUNDUP(newsz);
+    pte = walk(pagetable,va,0);
+    if(!(*pte & PTE_PG))
+      uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    else
+      uvmunmap(pagetable, PGROUNDUP(newsz), npages, 0);
   }
 
   return newsz;
