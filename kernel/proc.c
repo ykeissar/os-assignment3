@@ -859,7 +859,7 @@ find_nfu(void){
   struct page_access_info *min_pi = 0;
 
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-    if(pi->in_use && pi->access_counter < _min){
+    if(pi->in_use && pi->access_counter < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
       _min = pi->access_counter;
       min_pi = pi;
     }
@@ -882,7 +882,7 @@ find_scfifo(void){
     min_pi = 0;
 
     for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-      if(pi->in_use && pi->loaded_at < _min){
+      if(pi->in_use && pi->loaded_at < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
         _min = pi->loaded_at;
         min_pi = pi;
       }
@@ -908,14 +908,16 @@ find_lapa(void){
   struct page_access_info *pi;
   struct page_access_info *min_pi = 0;
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-    if(pi->in_use && count_ones(pi->access_counter) < _min){
-      _min = count_ones(pi->access_counter);
-      min_pi = pi;
-    }
-    else if(pi->in_use && count_ones(pi->access_counter) == _min){
-      if(!min_pi || pi->access_counter < min_pi->access_counter){
+    if(pi->in_use && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
+      if(count_ones(pi->access_counter) < _min){
         _min = count_ones(pi->access_counter);
         min_pi = pi;
+      }
+      else if(count_ones(pi->access_counter) == _min){
+        if(!min_pi || pi->access_counter < min_pi->access_counter){
+          _min = count_ones(pi->access_counter);
+          min_pi = pi;
+        }
       }
     }
   }
