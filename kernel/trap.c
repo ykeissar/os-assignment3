@@ -44,6 +44,7 @@ usertrap(void)
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);
+  sfence_vma();
 
   struct proc *p = myproc();
   
@@ -68,6 +69,7 @@ usertrap(void)
   } else if ((r_scause() == 13 || r_scause() == 15 || r_scause() == 12) && SELECTION != NONE){
     // page_fault
     uint64 va = r_stval();
+    printf("Page Fault at %p\n",va);
     pte_t *pte = walk(p->pagetable,va,0);
     if(!pte || !(*pte & PTE_PG)){
       printf("usertrap(): sigfault scause %p pid=%d\n", r_scause(), p->pid);
@@ -139,6 +141,7 @@ usertrapret(void)
 
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);
+  sfence_vma();
 
   // jump to trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
