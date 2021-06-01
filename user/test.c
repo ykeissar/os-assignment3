@@ -3,15 +3,7 @@
 #include "user/user.h"
 #include "kernel/param.h"
 
-#define PGSIZE 4096 // bytes per page
-
-//fork + correct initializations
-
-struct pgtest{
-    int id;
-    int accessed;
-    int should_be_selected;
-};
+#define PGSIZE 4096
 
 /*
     struct page_access_info{
@@ -50,88 +42,119 @@ struct pgtest{
             
 */
 
-
 //tries to access a page that is not belong to it
-void test_unvalid_access(void){
-    char *memo = malloc(PGSIZE);
-    printf("memo is %p\n",memo);
-    memo[2*PGSIZE]='l';
-}
-
-//tries to access a page that is not belong to it
-void testtt(void){
+int test1(void){
     char *memo = malloc(PGSIZE*16);
     int i,j;
-    for(i = 0 ; i < 16 ; i++){
-        printf("page %d at %p\n",i,&memo[PGSIZE*i]);
-    }
-    for(j = 0 ; j < 10 ; j++){
+    int NUM_ITER = 20;
+
+    // for(i = 0 ; i < 16 ; i++){
+    //     printf("page %d at %p\n",i,&memo[PGSIZE*i]);
+    // }
+    for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
-            memo[i*PGSIZE] = '1';
-            memo[5*PGSIZE] = '2';
-            memo[6*PGSIZE] = '2';
-            memo[7*PGSIZE] = '2';
-
-        }
-        printf("\n-------------------loop %d----------------------\n",j);
-    }
-}
-
-//only one page
-void test_one_page(void){
-    char *memo = malloc(PGSIZE);
-    printf("memo is %p\n",memo);
-    *memo='l';
-}
-
-//proc uses more than 16 pages in ram, test if selection algo is applied
-void test_apply_selection(void){
-    char *memo = malloc(MAX_PSYC_PAGES * PGSIZE);
-    char *another_page = malloc(PGSIZE);
-    printf("memo is %p\n another page is %p\n",memo,another_page);
-    int i;
-    for(i=0; i<16; i++){
-        printf("accessing %d, address: %p\n",i, &memo[i*PGSIZE]);
-        *memo ='l';
-    }
-    *another_page = 'l';
-
-}
-
-//selection of right page for each algorithm
-// allocates 16 pages, uses again all pages except page4, upon new page, selected = page 4
-void test_correct_selection(void){
-    char* memo = malloc(MAX_PSYC_PAGES * PGSIZE);
-    int i;
-    for(i=0; i<16; i++){
-        memo[i*PGSIZE] = 'l';
-    }
-    for(i=0; i<16; i++){
-        if(i != 3){
-            memo[i*PGSIZE]='l';
+            memo[i*PGSIZE] = (char)j+i;
+            memo[5*PGSIZE] = (char)j+i;
+            memo[6*PGSIZE] = (char)j+i;
+            memo[7*PGSIZE] = (char)j+i;
         }
     }
-    char *another_page = malloc(PGSIZE);
-    *another_page = 'l';
+    uint all_pass = 1;
+    for(i = 0 ; i < 16 ; i++){
+        if(i >=5 && i<=7){
+            all_pass &= (memo[i*PGSIZE] == (char)15+(NUM_ITER-1));
+        }
+        else{
+            all_pass &= (memo[i*PGSIZE] == (char)i+(NUM_ITER-1));
+        }
+    }
+    return all_pass ;
+}
 
+int test_fork(void){
+    char *memo = malloc(PGSIZE*16);
+    int i,j;
+    int NUM_ITER = 5;
+    int offset = 5;
+    int cpid1;
+    int cpid2;
+    int cret1;
+    int cret2;
+
+    for(j = 0 ; j < NUM_ITER ; j++){
+        for(i = 0 ; i < 16 ; i++){
+            memo[i*PGSIZE] = (char)j+i;
+            memo[5*PGSIZE] = (char)j+i;
+            memo[6*PGSIZE] = (char)j+i;
+            memo[7*PGSIZE] = (char)j+i;
+        }
+    }
+    
+    cpid1 = fork();
+
+    for(j = 0 ; j < NUM_ITER ; j++){
+        for(i = 0 ; i < 16 ; i++){
+            memo[i*PGSIZE] = (char)j+i+offset;
+            memo[5*PGSIZE] = (char)j+i+offset;
+            memo[6*PGSIZE] = (char)j+i+offset;
+            memo[7*PGSIZE] = (char)j+i+offset;
+        }
+    }
+
+    cpid2 = fork();
+
+    for(j = 0 ; j < NUM_ITER ; j++){
+        for(i = 0 ; i < 16 ; i++){
+            memo[i*PGSIZE] = (char)j+i+(offset*2);
+            memo[5*PGSIZE] = (char)j+i+(offset*2);
+            memo[6*PGSIZE] = (char)j+i+(offset*2);
+            memo[7*PGSIZE] = (char)j+i+(offset*2);
+        }
+    }
+
+    uint all_pass = 1;
+    for(i = 0 ; i < 16 ; i++){
+        if(i >=5 && i<=7){
+            all_pass &= (memo[i*PGSIZE] == (char)15+(NUM_ITER-1)+(offset*2));
+        }
+        else{
+            all_pass &= (memo[i*PGSIZE] == (char)i+(NUM_ITER-1)+(offset*2));
+        }
+    }
+
+    if(cpid1 != 0){
+        wait(&cret1);
+    }
+    if(cpid2 != 0){
+        wait(&cret2);
+        exit(all_pass && cret2);
+    }
+    else{
+        exit(all_pass);
+    }
+    return all_pass && cret1 && cret2;
 }
 
 struct test {
-    void (*f)(void);
+    int (*f)(void);
     char *s;
   } tests[] = {
-    // {test_apply_selection, "test_apply_selection"},
-    // {test_one_page, "test_one_page"},
-    {testtt,"testtt"},
-    // {test_unvalid_access, "test_unvalid_access"},
-    // {test_correct_selection, "test_correct_selection"},
+    {test1,"test1"},
+    // {test_fork, "test_fork"},
     { 0, 0}, 
   };
 
 int main(void){
+    int res;
     for (struct test *t = tests; t->s != 0; t++) {
         printf("----------- test - %s -----------\n", t->s);
-        t->f();
+        res = t->f();
+        if(res){
+            printf("----------- %s PASSED -----------\n", t->s);
+        }
+        else{
+            printf("----------- %s FAILED -----------\n", t->s);
+        }
     }
 
     exit(0);

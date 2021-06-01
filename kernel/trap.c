@@ -69,7 +69,7 @@ usertrap(void)
   } else if ((r_scause() == 13 || r_scause() == 15 || r_scause() == 12) && SELECTION != NONE){
     // page_fault
     uint64 va = r_stval();
-    printf("Page Fault at %p\n",va);
+    // printf("Page Fault at %p\n",va);
     pte_t *pte = walk(p->pagetable,va,0);
     if(!pte || !(*pte & PTE_PG)){
       printf("usertrap(): sigfault scause %p pid=%d\n", r_scause(), p->pid);
