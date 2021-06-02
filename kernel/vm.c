@@ -232,7 +232,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
     // in case there is no more physical memory
-    if(a >= MAX_PSYC_PAGES*PGSIZE && pid != 1 && pid != 2 && SELECTION != NONE){
+    if(a >= MAX_PSYC_PAGES*PGSIZE && pid > 2 && SELECTION != NONE){
       pte_t *pte = find_page_to_store(&page_address);
       if(store_page(pte,page_address) < 0){
         return 0;

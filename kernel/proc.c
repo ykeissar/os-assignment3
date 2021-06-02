@@ -127,6 +127,12 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  if(p->pid > 2){
+    release(&p->lock);
+    createSwapFile(p);
+    acquire(&p->lock);
+  }
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -293,8 +299,6 @@ growproc(int n)
   return 0;
 }
 
-char buffer[PGSIZE];
-
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -331,31 +335,33 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
-  release(&np->lock);
-  createSwapFile(np);
-  acquire(&np->lock);
-
   struct storedpage* sp;
   struct storedpage* nsp = np->storedpages;
-
-  for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
-    if(sp->in_use){
-      // printf("11%d to %d end fork\n",p->pid,np->pid);
-      // release(&p->lock);
-      if(readFromSwapFile(p,buffer,sp->file_offset,PGSIZE) < 0)
-        return -1;
-      // acquire(&p->lock);
-      // printf("22%d to %d end fork\n",p->pid,np->pid);
-      release(&np->lock);
-      if(writeToSwapFile(np,buffer,sp->file_offset,PGSIZE) < 0)
-        return -1;
-      acquire(&np->lock);
-      nsp->page_address = sp->page_address;
-      nsp->in_use = sp->in_use;
+  pte_t *pte;
+  release(&np->lock);
+  char* buffer = kalloc();
+  if(p->pid>2){
+    for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
+      if(sp->in_use){
+        if(readFromSwapFile(p,buffer,sp->page_address,PGSIZE) < 0 && 0){
+          printf("failed to read from %d at %p\n",p->pid,sp->file_offset);
+          return -1;
+        }
+        if(writeToSwapFile(np,buffer,sp->page_address,PGSIZE) < 0 && 0){
+          printf("failed to write to %d at offset %p page_add:%p\n",np->pid,sp->file_offset,sp->page_address);
+          return -1;
+        }
+        // pte = walk(np->pagetable,PGROUNDDOWN(sp->page_address),0);
+        printf("%d copied %p from %d, pte:%p\n",np->pid,sp->page_address,p->pid,*pte);
+        // *pte |= PTE_PG;
+        nsp->page_address = sp->page_address;
+        nsp->in_use = sp->in_use;
+      }
+      nsp++;
     }
-    nsp++;
   }
-
+  acquire(&np->lock);
+  kfree(buffer);
   struct page_access_info* pi;
   struct page_access_info* npi = np->ram_pages;
 
@@ -377,7 +383,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-
+  printf("%d to %d end\n",p->pid,np->pid);
   return pid;
 }
 
@@ -415,7 +421,9 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-  removeSwapFile(p);
+  if(p->pid>2){
+    removeSwapFile(p);
+  }
 
   begin_op();
   iput(p->cwd);
@@ -731,9 +739,11 @@ store_page(pte_t *pte, uint64 page_address){
 
   uint64 pa = PTE2PA(*pte);
 
-  if(!sp || !pa || writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE) < 0)
+  if(!sp || !pa)
     return -1;
-  
+  writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE);
+
+  printf("%d store page_add:%p\n",p->pid,page_address);
   sp->in_use = 1;
   sp->page_address = page_address;
   *pte |= PTE_PG;
@@ -764,8 +774,10 @@ load_page(uint64 va){
     return -1;
   }
 
-  if(!sp || readFromSwapFile(p, (char*)pa, sp->file_offset, PGSIZE) < 0)
+  if(!sp)
     return -1;
+
+  readFromSwapFile(p, (char*)pa, sp->file_offset, PGSIZE);
   
   sp->in_use = 0;
   sp->page_address = 0;
@@ -866,7 +878,7 @@ find_nfu(void){
     // if(pi)
     //   printf("in use: %d page_add: %p couter: %p\n",pi->in_use,pi->page_address,pi->access_counter);
 
-    if(pi->in_use && pi->access_counter < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
+    if(pi->in_use && pi->access_counter < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V) && pi->page_address != TRAMPOLINE && pi->page_address != TRAPFRAME){
       _min = pi->access_counter;
       min_pi = pi;
     }
@@ -889,7 +901,7 @@ find_scfifo(void){
     min_pi = 0;
 
     for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-      if(pi->in_use && pi->loaded_at < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
+      if(pi->in_use && pi->loaded_at < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V) && pi->page_address != TRAMPOLINE && pi->page_address != TRAPFRAME){
         _min = pi->loaded_at;
         min_pi = pi;
       }
@@ -920,7 +932,7 @@ find_lapa(void){
     // if(pi)
     //   printf("in use:%d page_add: %p couter: %p, #1:%d\n",pi->in_use,pi->page_address,pi->access_counter,count_ones(pi->access_counter));
 
-    if(pi->in_use && (*walk(p->pagetable,pi->page_address,0) & PTE_V)){
+    if(pi->in_use && (*walk(p->pagetable,pi->page_address,0) & PTE_V)&& pi->page_address != TRAMPOLINE && pi->page_address != TRAPFRAME){
       if(count_ones(pi->access_counter) < _min){
         _min = count_ones(pi->access_counter);
         min_pi = pi;

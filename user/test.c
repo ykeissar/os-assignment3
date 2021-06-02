@@ -77,10 +77,12 @@ int test_fork(void){
     int NUM_ITER = 5;
     int offset = 5;
     int cpid1;
-    int cpid2;
+    int cpid2=0;
     int cret1;
     int cret2;
-
+    for(i = 0 ; i < 16 ; i++){
+        printf("page %d at %p\n",i,&memo[PGSIZE*i]);
+    }
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
             memo[i*PGSIZE] = (char)j+i;
@@ -89,9 +91,11 @@ int test_fork(void){
             memo[7*PGSIZE] = (char)j+i;
         }
     }
-    
-    cpid1 = fork();
 
+    if((cpid1 = fork()) < 0){
+        printf("FAILED - 1st fork\n");
+        return 0;
+    }
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
             memo[i*PGSIZE] = (char)j+i+offset;
@@ -100,8 +104,11 @@ int test_fork(void){
             memo[7*PGSIZE] = (char)j+i+offset;
         }
     }
-
-    cpid2 = fork();
+    
+    // if((cpid2 = fork()) < 0){
+    //     printf("FAILED - 2nd fork\n");
+    //     return 0;
+    // }    
 
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
@@ -139,8 +146,8 @@ struct test {
     int (*f)(void);
     char *s;
   } tests[] = {
-    {test1,"test1"},
-    // {test_fork, "test_fork"},
+    // {test1,"test1"},
+    {test_fork, "test_fork"},
     { 0, 0}, 
   };
 
