@@ -77,7 +77,7 @@ int test_fork(void){
     int NUM_ITER = 5;
     int offset = 5;
     int cpid1;
-    int cpid2=0;
+    int cpid2 = 0;
     int cret1;
     int cret2;
     for(i = 0 ; i < 16 ; i++){
@@ -96,6 +96,7 @@ int test_fork(void){
         printf("FAILED - 1st fork\n");
         return 0;
     }
+
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
             memo[i*PGSIZE] = (char)j+i+offset;
@@ -105,10 +106,10 @@ int test_fork(void){
         }
     }
     
-    // if((cpid2 = fork()) < 0){
-    //     printf("FAILED - 2nd fork\n");
-    //     return 0;
-    // }    
+    if((cpid2 = fork()) < 0){
+        printf("FAILED - 2nd fork\n");
+        return 0;
+    }    
 
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
@@ -123,22 +124,49 @@ int test_fork(void){
     for(i = 0 ; i < 16 ; i++){
         if(i >=5 && i<=7){
             all_pass &= (memo[i*PGSIZE] == (char)15+(NUM_ITER-1)+(offset*2));
+            if(getpid() == 5)
+                printf("i:%d -- %d ?= %d\n",i,memo[i*PGSIZE],(char)15+(NUM_ITER-1)+(offset*2));
         }
         else{
             all_pass &= (memo[i*PGSIZE] == (char)i+(NUM_ITER-1)+(offset*2));
+            if(getpid() == 5)
+                printf("i:%d -- %d ?= %d\n",i,memo[i*PGSIZE],(char)i+(NUM_ITER-1)+(offset*2));
+
         }
     }
 
+    // for tree processes- 
+    //    3
+    //  5   4
+    //        6
+    
+    // case 3,5
     if(cpid1 != 0){
-        wait(&cret1);
+        // case 3
+        if(cpid2 != 0){
+            wait(&cret1);
+            wait(&cret2);
+        }
+        // // case 5
+        else{
+            wait(&cret1);
+            exit(all_pass && cret1);
+        }
     }
-    if(cpid2 != 0){
-        wait(&cret2);
-        exit(all_pass && cret2);
-    }
+    // case 6,4
     else{
-        exit(all_pass);
+        // case 4
+        if(cpid2 != 0){
+            wait(&cret2);
+            exit(all_pass && cret2);
+        }
+        // case 6
+        else{
+            exit(all_pass);
+        }
     }
+    
+    printf("%d got to return ap:%d cret1:%d cret2:%d\n",getpid(),all_pass,cret1,cret2);
     return all_pass && cret1 && cret2;
 }
 

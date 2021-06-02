@@ -313,7 +313,6 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  printf("%d to %d\n",p->pid,np->pid);
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
@@ -337,23 +336,15 @@ fork(void)
 
   struct storedpage* sp;
   struct storedpage* nsp = np->storedpages;
-  pte_t *pte;
+
   release(&np->lock);
   char* buffer = kalloc();
   if(p->pid>2){
     for(sp = p->storedpages; sp < &p->storedpages[MAX_TOTAL_PAGES]; sp++){
       if(sp->in_use){
-        if(readFromSwapFile(p,buffer,sp->page_address,PGSIZE) < 0 && 0){
-          printf("failed to read from %d at %p\n",p->pid,sp->file_offset);
-          return -1;
-        }
-        if(writeToSwapFile(np,buffer,sp->page_address,PGSIZE) < 0 && 0){
-          printf("failed to write to %d at offset %p page_add:%p\n",np->pid,sp->file_offset,sp->page_address);
-          return -1;
-        }
-        // pte = walk(np->pagetable,PGROUNDDOWN(sp->page_address),0);
-        printf("%d copied %p from %d, pte:%p\n",np->pid,sp->page_address,p->pid,*pte);
-        // *pte |= PTE_PG;
+        readFromSwapFile(p,buffer,sp->page_address,PGSIZE);
+        writeToSwapFile(np,buffer,sp->page_address,PGSIZE);
+
         nsp->page_address = sp->page_address;
         nsp->in_use = sp->in_use;
       }
@@ -383,7 +374,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  printf("%d to %d end\n",p->pid,np->pid);
+
   return pid;
 }
 
@@ -743,7 +734,6 @@ store_page(pte_t *pte, uint64 page_address){
     return -1;
   writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE);
 
-  printf("%d store page_add:%p\n",p->pid,page_address);
   sp->in_use = 1;
   sp->page_address = page_address;
   *pte |= PTE_PG;
@@ -875,9 +865,6 @@ find_nfu(void){
   struct page_access_info *min_pi = 0;
 
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-    // if(pi)
-    //   printf("in use: %d page_add: %p couter: %p\n",pi->in_use,pi->page_address,pi->access_counter);
-
     if(pi->in_use && pi->access_counter < _min && (*walk(p->pagetable,pi->page_address,0) & PTE_V) && pi->page_address != TRAMPOLINE && pi->page_address != TRAPFRAME){
       _min = pi->access_counter;
       min_pi = pi;
@@ -905,8 +892,6 @@ find_scfifo(void){
         _min = pi->loaded_at;
         min_pi = pi;
       }
-      // if(pi)
-      //   printf("in use: %d, page_add:%p, turn:%p accessed:%d\n",pi->in_use,pi->page_address,pi->loaded_at, *walk(p->pagetable,min_pi->page_address,0) & PTE_A);
     }
     pte = walk(p->pagetable,min_pi->page_address,0);
     
@@ -929,9 +914,6 @@ find_lapa(void){
   struct page_access_info *pi;
   struct page_access_info *min_pi = 0;
   for(pi=p->ram_pages; pi<&p->ram_pages[MAX_PSYC_PAGES]; pi++){
-    // if(pi)
-    //   printf("in use:%d page_add: %p couter: %p, #1:%d\n",pi->in_use,pi->page_address,pi->access_counter,count_ones(pi->access_counter));
-
     if(pi->in_use && (*walk(p->pagetable,pi->page_address,0) & PTE_V)&& pi->page_address != TRAMPOLINE && pi->page_address != TRAPFRAME){
       if(count_ones(pi->access_counter) < _min){
         _min = count_ones(pi->access_counter);
@@ -954,15 +936,12 @@ find_page_to_store(uint64* page_address){
   switch(SELECTION){
     case NFUA:
       *page_address = find_nfu();
-      // printf("picked %p\n",*page_address);
       return walk(p->pagetable,*page_address,0);
     case LAPA:
       *page_address = find_lapa();
-      // printf("picked %p\n",*page_address);
       return walk(p->pagetable,*page_address,0);
     case SCFIFO:
       *page_address = find_scfifo();
-      // printf("picked %p\n",*page_address);
       return walk(p->pagetable,*page_address,0);
   }
   return 0;
