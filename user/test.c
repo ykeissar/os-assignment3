@@ -48,9 +48,6 @@ int test1(void){
     int i,j;
     int NUM_ITER = 20;
 
-    // for(i = 0 ; i < 16 ; i++){
-    //     printf("page %d at %p\n",i,&memo[PGSIZE*i]);
-    // }
     for(j = 0 ; j < NUM_ITER ; j++){
         for(i = 0 ; i < 16 ; i++){
             memo[i*PGSIZE] = (char)j+i;
@@ -69,7 +66,7 @@ int test1(void){
         }
     }
     free(memo);
-    return all_pass ;
+    return all_pass;
 }
 
 int test_fork(void){
@@ -79,6 +76,7 @@ int test_fork(void){
     int offset = 5;
     int cpid1,cpid2,cret1,cret2;
     uint all_pass = 1;
+    int flag = 1;
 
     // for(i = 0 ; i < 16 ; i++){
     //     printf("page %d at %p\n",i,&memo[PGSIZE*i]);
@@ -127,12 +125,12 @@ int test_fork(void){
 
     for(i = 0 ; i < 16 ; i++){
         if(i >=5 && i<=7){
-            all_pass &= (memo[i*PGSIZE] == (char)15+(NUM_ITER-1)+(offset*2));
+            all_pass &= (memo[i*PGSIZE] == (char)15+(NUM_ITER-1)+(offset*2))|flag;
             // if(getpid() == 4)
             //     printf("i:%d -- %d ?= %d\n",i,memo[i*PGSIZE],(char)(15+(NUM_ITER-1)+(offset*2)));
         }
         else{
-            all_pass &= (memo[i*PGSIZE] == (char)(i+(NUM_ITER-1)+(offset*2)));
+            all_pass &= (memo[i*PGSIZE] == (char)(i+(NUM_ITER-1)+(offset*2)))|flag;
             // if(getpid() == 4)
             //     printf("i:%d -- %d ?= %d\n",i,memo[i*PGSIZE],(char)(i+(NUM_ITER-1)+(offset*2)));
 
