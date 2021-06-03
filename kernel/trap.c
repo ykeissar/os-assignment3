@@ -72,7 +72,7 @@ usertrap(void)
     // printf("Page Fault at %p\n",va);
     pte_t *pte = walk(p->pagetable,va,0);
     if(!pte || !(*pte & PTE_PG)){
-      printf("pte: %p, pg:%p\n",*pte,(*pte & PTE_PG));
+      // printf("pte: %p, pg:%p\n",*pte,(*pte & PTE_PG));
       printf("usertrap(): sigfault scause %p pid=%d\n", r_scause(), p->pid);
       printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
       p->killed = 1;

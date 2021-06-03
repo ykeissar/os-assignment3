@@ -360,9 +360,12 @@ fork(void)
     if(pi->in_use){
       npi->page_address = pi->page_address;
       npi->in_use = pi->in_use;
+      // npi->loaded_at = pi->loaded_at;
+      npi->access_counter = pi->access_counter;
     }
     npi++;
   }
+  // np->page_turn = p->page_turn;
 
   pid = np->pid;
   release(&np->lock);
@@ -430,7 +433,7 @@ exit(int status)
   wakeup(p->parent);
   
   acquire(&p->lock);
-
+  // printf("%d exiting with %d\n",p->pid,status);
   p->xstate = status;
   p->state = ZOMBIE;
 
@@ -729,9 +732,13 @@ store_page(pte_t *pte, uint64 page_address){
   struct storedpage *sp = get_free_storedpage();
 
   uint64 pa = PTE2PA(*pte);
-
+  // if(p->pid == 4)
+  //   printf("storing va:%p from pa:%p, off:%p\n",PGROUNDDOWN(page_address sp->file_offset);
   if(!sp || !pa)
     return -1;
+  // if(writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE)<0){
+  //   printf("storing va:%p from pa:%p FAILED off:%p\n",PGROUNDDOWN(page_address),pa,sp->file_offset);
+  // }
   writeToSwapFile(p, (char*)pa, sp->file_offset, PGSIZE);
 
   sp->in_use = 1;
@@ -755,7 +762,7 @@ load_page(uint64 va){
   struct proc *p = myproc();
   struct storedpage *sp = get_wanted_storedpage(va);
   pte_t *pte;
-
+  va = PGROUNDDOWN(va);
   if((pte = walk(p->pagetable,va,0)) == 0)
     return -1;
 
@@ -764,10 +771,15 @@ load_page(uint64 va){
     return -1;
   }
 
+  // if(p->pid == 4)
+  //   printf("loading va:%p to pa:%p off:%p\n",PGROUNDDOWN(va),pa,sp->file_offset);
+
   if(!sp)
     return -1;
 
   readFromSwapFile(p, (char*)pa, sp->file_offset, PGSIZE);
+    // printf("loading va:%p to pa:%p FAILED\n",PGROUNDDOWN(va),pa,sp->file_offset);
+  
   
   sp->in_use = 0;
   sp->page_address = 0;
